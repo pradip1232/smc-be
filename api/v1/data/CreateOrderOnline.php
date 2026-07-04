@@ -188,7 +188,8 @@ try {
 
     // ==================== PHONEPE PAYMENT INITIATION ====================
     $morderid = 'ORD' . time();
-    $redirectUrl = 'http://localhost:5173/payment-status?morderid=' . urlencode($morderid);  // Must be full URL
+    // $redirectUrl = 'http://localhost/smc/payments/paymentStatus.php?morderid=' . urlencode($morderid);  // Must be full URL
+    $redirectUrl = 'http://localhost:5173/payment/loading?morderid=' . urlencode($morderid);  // Must be full URL
 
 
     $payload = [

@@ -1,15 +1,32 @@
 <?php
-// paymentStatus.php
+// paymentStatus.php - Clean JSON Response with status & message
+
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: http://localhost:5173');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Credentials: true');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+
 session_start();
 include 'accessToken.php';
 
-$merchantOrderId = $_SESSION['merchantOrderId'] ?? $_GET['merchantOrderId'] ?? null;
+$merchantOrderId = $_SESSION['merchantOrderId'] ?? $_GET['merchantOrderId'] ?? $_GET['morderid'] ?? null;
 
 if (!$merchantOrderId) {
-    die("<h3 style='color:red;'>Order ID not found.</h3>");
+    http_response_code(400);
+    echo json_encode([
+        'status' => false,
+        'message' => 'Order ID not found'
+    ]);
+    exit;
 }
 
-// === CORRECT STATUS ENDPOINT ===
+// === PHONEPE STATUS CHECK ===
 $statusUrl = "https://api-preprod.phonepe.com/apis/pg-sandbox/checkout/v2/order/" . $merchantOrderId . "/status";
 
 $curl = curl_init();
@@ -27,62 +44,53 @@ $response = curl_exec($curl);
 $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
 
 if (curl_errno($curl)) {
-    die('cURL Error: ' . curl_error($curl));
+    http_response_code(500);
+    echo json_encode([
+        'status' => false,
+        'message' => 'cURL Error: ' . curl_error($curl)
+    ]);
+    curl_close($curl);
+    exit;
 }
+
 curl_close($curl);
 
 $data = json_decode($response, true);
-?>
 
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Payment Status</title>
-    <style>
-        body { font-family: Arial; text-align: center; padding: 50px; }
-        .success { color: green; font-size: 26px; }
-        .failed  { color: red; font-size: 26px; }
-        .pending { color: orange; font-size: 24px; }
-    </style>
-</head>
-<body>
-
-<h2>Payment Status</h2>
-
-<?php if (isset($data['state'])): ?>
+// === FINAL CLEAN RESPONSE ===
+if (isset($data['state'])) {
     
-    <strong>Merchant Order ID:</strong> <?= htmlspecialchars($merchantOrderId) ?><br><br>
-    <strong>PhonePe Order ID:</strong> <?= htmlspecialchars($data['orderId'] ?? 'N/A') ?><br>
-    <strong>State:</strong> <?= htmlspecialchars($data['state']) ?><br>
-    <strong>Amount:</strong> <?= isset($data['amount']) ? $data['amount']/100 : 0 ?> INR<br><br>
+    $state = strtoupper($data['state']);
+    $isSuccess = ($state === 'COMPLETED');
 
-    <?php if ($data['state'] === 'COMPLETED'): ?>
-        <h3 class="success">✅ Payment Successful!</h3>
-        
-    <?php elseif ($data['state'] === 'FAILED'): ?>
-        <h3 class="failed">❌ Payment Failed</h3>
-        Error: <?= htmlspecialchars($data['errorCode'] ?? '') ?> 
-        
-    <?php elseif ($data['state'] === 'PENDING'): ?>
-        <h3 class="pending">⏳ Payment is Pending</h3>
-        
-    <?php else: ?>
-        <h3>Unknown Status</h3>
-    <?php endif; ?>
+    $message = match($state) {
+        'COMPLETED' => 'Payment Successful',
+        'FAILED'    => 'Payment Failed',
+        'PENDING'   => 'Payment is Pending',
+        default     => 'Unknown Payment Status'
+    };
 
-    <br><hr><br>
-    <details>
-        <summary>Full Response (Debug)</summary>
-        <pre><?= htmlspecialchars(print_r($data, true)) ?></pre>
-    </details>
+    echo json_encode([
+        'status'  => $isSuccess,
+        'message' => $message,
+        'state'   => $state,
+        'data'    => [
+            'merchantOrderId' => $merchantOrderId,
+            'phonepeOrderId'  => $data['orderId'] ?? null,
+            'amount'          => isset($data['amount']) ? $data['amount'] / 100 : 0,
+            'errorCode'       => $data['errorCode'] ?? null,
+            'raw'             => $data   // Full PhonePe response (for debugging)
+        ]
+    ]);
 
-<?php else: ?>
-    <h3 style="color:red;">Failed to fetch status</h3>
-    <strong>HTTP Code:</strong> <?= $httpCode ?><br>
-    <pre><?= htmlspecialchars($response) ?></pre>
-<?php endif; ?>
+} else {
+    http_response_code(400);
+    echo json_encode([
+        'status'  => false,
+        'message' => 'Failed to fetch payment status from PhonePe',
+        'data'    => null
+    ]);
+}
 
-</body>
-</html>
-
-<?php unset($_SESSION['merchantOrderId']); ?>
+unset($_SESSION['merchantOrderId']);
+?>

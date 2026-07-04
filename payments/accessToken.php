@@ -81,9 +81,9 @@ curl_close($curl);
 
 $getToken = json_decode($response, true);
 
-echo "<pre>";
-print_r($getToken);
-echo "</pre>";
+// echo "<pre>";
+// print_r($getToken);
+// echo "</pre>";
 
 if (
     isset($getToken['access_token']) &&
