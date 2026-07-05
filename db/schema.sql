@@ -325,3 +325,46 @@ JOIN product_images pi ON pi.product_id = p.id
 WHERE p.product_id = 'SMC-PROD-0001'
 ORDER BY pi.is_main DESC, pi.id ASC;
 */
+
+
+
+ALTER TABLE `orders`
+ADD COLUMN `merchant_id` VARCHAR(100) NULL AFTER `user_id`;
+
+CREATE TABLE IF NOT EXISTS shipments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    
+    order_id VARCHAR(50) NOT NULL,
+    
+    customer_name VARCHAR(255),
+    phone VARCHAR(20),
+    shipping_address TEXT,
+    city VARCHAR(100),
+    state VARCHAR(100),
+    country VARCHAR(100),
+    pincode VARCHAR(20),
+    
+    tracking_id VARCHAR(100),
+    
+    shipment_status ENUM('pending', 'shipped', 'in_transit', 'delivered', 'cancelled') DEFAULT 'pending',
+    
+    shipping_charge DECIMAL(10,2) DEFAULT 0,
+    shipping_charge_status ENUM('pending', 'success', 'failed') DEFAULT 'pending',
+    
+    cod_amount DECIMAL(10,2) DEFAULT 0,
+    cod_status ENUM('pending', 'collected', 'failed') DEFAULT 'pending',
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+ALTER TABLE orders
+ADD COLUMN merchant_id VARCHAR(255) AFTER user_id,
+ADD COLUMN customer_email VARCHAR(255) AFTER customer_name,
+ADD COLUMN status VARCHAR(50) DEFAULT 'pending' AFTER total_amount,
+ADD COLUMN subtotal DECIMAL(10,2) DEFAULT 0 AFTER pincode,
+ADD COLUMN tax DECIMAL(10,2) DEFAULT 0 AFTER subtotal,
+ADD COLUMN shipping_cost DECIMAL(10,2) DEFAULT 0 AFTER tax;
