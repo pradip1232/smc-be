@@ -215,7 +215,11 @@ unset($_SESSION['merchantOrderId']);
 // }
 
 // unset($_SESSION['merchantOrderId']);
+<<<<<<< HEAD
 // ?>
 
 
 <!-- enum 'pending','confirmed','shipped','delivered','cancelled' -->
+=======
+// ?>
+>>>>>>> f05ba20b4d3983e4a5f4e5f55eafed24b3821601

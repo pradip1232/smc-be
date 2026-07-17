@@ -367,6 +367,7 @@ ADD COLUMN customer_email VARCHAR(255) AFTER customer_name,
 ADD COLUMN status VARCHAR(50) DEFAULT 'pending' AFTER total_amount,
 ADD COLUMN subtotal DECIMAL(10,2) DEFAULT 0 AFTER pincode,
 ADD COLUMN tax DECIMAL(10,2) DEFAULT 0 AFTER subtotal,
+<<<<<<< HEAD
 ADD COLUMN shipping_cost DECIMAL(10,2) DEFAULT 0 AFTER tax;
 
 
@@ -645,3 +646,6 @@ ALTER TABLE products
 ADD COLUMN gst DECIMAL(5,2) DEFAULT 18.00 AFTER net_weight;
 ALTER TABLE product_images
 ADD COLUMN variant_id VARCHAR(50) AFTER product_id;
+=======
+ADD COLUMN shipping_cost DECIMAL(10,2) DEFAULT 0 AFTER tax;
+>>>>>>> f05ba20b4d3983e4a5f4e5f55eafed24b3821601

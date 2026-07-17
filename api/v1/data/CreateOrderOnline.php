@@ -186,8 +186,13 @@ if (!empty($items)) {
 
     // ==================== PHONEPE CALL (Always for shipping charge in COD) ====================
     $amountToPay = ($paymentMethod === 'COD') ? $shipping_cost : $total_amount;
+<<<<<<< HEAD
     // https://shreemahaveercollections.com/
     $redirectUrl = 'https://shreemahaveercollections.com/payment/loading?morderid=' . urlencode($morderid) . '&UserId=' . $user_id.'&paymentMethod='.$paymentMethod;
+=======
+
+    $redirectUrl = 'http://localhost:5173/payment/loading?morderid=' . urlencode($morderid) . '&UserId=' . $user_id.'&paymentMethod='.$paymentMethod;
+>>>>>>> f05ba20b4d3983e4a5f4e5f55eafed24b3821601
 
     $payload = [
         'merchantOrderId' => $morderid,
