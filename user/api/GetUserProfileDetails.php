@@ -1,5 +1,5 @@
 <?php
-// admin/api/GetUserProfile.php
+// user/api/GetUserProfile.php
 header('Content-Type: application/json');
 require_once __DIR__ . '/db.php';
 
@@ -9,39 +9,23 @@ function fail($msg, $code = 400) {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'GET' && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     fail('Method not allowed', 405);
 }
 
-// ====================== Get User Identifier ======================
-$userId = null;
-$email  = null;
+$input = json_decode(file_get_contents('php://input'), true) ?? [];
 
-// 1. From Header (Recommended for authenticated requests)
-if (isset($_SERVER['HTTP_X_USER_ID']) && !empty($_SERVER['HTTP_X_USER_ID'])) {
-    $userId = (int)$_SERVER['HTTP_X_USER_ID'];
-}
-
-// 2. From Query Parameter
-if (!$userId && isset($_GET['user_id']) && !empty($_GET['user_id'])) {
-    $userId = (int)$_GET['user_id'];
-}
-
-// 3. From JSON Body (for POST requests)
-if (!$userId && !$email) {
-    $input = json_decode(file_get_contents('php://input'), true) ?? [];
-    $userId = $input['user_id'] ?? null;
-    $email  = $input['email'] ?? null;
-}
+$userId = $input['user_id'] ?? null;
+$email  = $input['email'] ?? null;
 
 if (!$userId && !$email) {
-    fail('user_id or email is required', 400);
+    fail('Either user_id or email is required', 400);
 }
 
 try {
     $sql = "SELECT 
-                id, first_name, last_name, email, phone_number,
-                city, state, country, landmark_address,
+                id, first_name, last_name, email, phone_number, 
+                city, state, country, landmark_address, 
                 status, created_at, updated_at 
             FROM users WHERE ";
 
@@ -65,13 +49,10 @@ try {
         fail('User not found', 404);
     }
 
-    // Optional: Get total users count (for dashboard)
-    $totalUsers = (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-
     echo json_encode([
-        'status'  => true,
+        'status' => true,
         'message' => 'Profile fetched successfully',
-        'user'    => [
+        'user' => [
             'id'               => (int)$user['id'],
             'first_name'       => $user['first_name'],
             'last_name'        => $user['last_name'],
@@ -85,15 +66,9 @@ try {
             'status'           => (int)$user['status'],
             'created_at'       => $user['created_at'],
             'updated_at'       => $user['updated_at']
-        ],
-        'stats' => [
-            'total_users' => $totalUsers,
-            // Future placeholders
-            'total_orders' => 0,
-            'total_pending_orders' => 0
         ]
     ]);
 
 } catch (Exception $e) {
-    fail('Database error: ' . $e->getMessage(), 500);
+    fail('Failed to fetch profile: ' . $e->getMessage(), 500);
 }

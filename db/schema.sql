@@ -325,3 +325,323 @@ JOIN product_images pi ON pi.product_id = p.id
 WHERE p.product_id = 'SMC-PROD-0001'
 ORDER BY pi.is_main DESC, pi.id ASC;
 */
+
+
+
+ALTER TABLE `orders`
+ADD COLUMN `merchant_id` VARCHAR(100) NULL AFTER `user_id`;
+
+CREATE TABLE IF NOT EXISTS shipments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    
+    order_id VARCHAR(50) NOT NULL,
+    
+    customer_name VARCHAR(255),
+    phone VARCHAR(20),
+    shipping_address TEXT,
+    city VARCHAR(100),
+    state VARCHAR(100),
+    country VARCHAR(100),
+    pincode VARCHAR(20),
+    
+    tracking_id VARCHAR(100),
+    
+    shipment_status ENUM('pending', 'shipped', 'in_transit', 'delivered', 'cancelled') DEFAULT 'pending',
+    
+    shipping_charge DECIMAL(10,2) DEFAULT 0,
+    shipping_charge_status ENUM('pending', 'success', 'failed') DEFAULT 'pending',
+    
+    cod_amount DECIMAL(10,2) DEFAULT 0,
+    cod_status ENUM('pending', 'collected', 'failed') DEFAULT 'pending',
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+ALTER TABLE orders
+ADD COLUMN merchant_id VARCHAR(255) AFTER user_id,
+ADD COLUMN customer_email VARCHAR(255) AFTER customer_name,
+ADD COLUMN status VARCHAR(50) DEFAULT 'pending' AFTER total_amount,
+ADD COLUMN subtotal DECIMAL(10,2) DEFAULT 0 AFTER pincode,
+ADD COLUMN tax DECIMAL(10,2) DEFAULT 0 AFTER subtotal,
+ADD COLUMN shipping_cost DECIMAL(10,2) DEFAULT 0 AFTER tax;
+
+
+
+-- new table for order , order_item , shipment 
+-- =============================================================================
+-- SHIPMENTS
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS `shipments` (
+
+    `id` INT NOT NULL AUTO_INCREMENT,
+
+    `order_id` VARCHAR(100) NOT NULL,
+
+    `customer_name` VARCHAR(255) DEFAULT NULL,
+    `phone` VARCHAR(20) DEFAULT NULL,
+
+    `shipping_address` TEXT,
+    `city` VARCHAR(100) DEFAULT NULL,
+    `state` VARCHAR(100) DEFAULT NULL,
+    `country` VARCHAR(100) DEFAULT NULL,
+    `pincode` VARCHAR(20) DEFAULT NULL,
+
+    `tracking_id` VARCHAR(100) DEFAULT NULL,
+
+    `shipment_status`
+        ENUM('pending','confirmed','packed','shipped','in_transit','out_for_delivery','delivered','cancelled','returned')
+        DEFAULT 'pending',
+
+    `shipping_charge` DECIMAL(10,2) DEFAULT 0.00,
+
+    `shipping_charge_status`
+        ENUM('pending','success','failed')
+        DEFAULT 'pending',
+
+    `cod_amount` DECIMAL(10,2) DEFAULT 0.00,
+
+    `cod_status`
+        ENUM('pending','collected','failed')
+        DEFAULT 'pending',
+
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (`id`),
+
+    KEY `idx_shipments_order_id` (`order_id`),
+
+    CONSTRAINT `fk_shipments_order`
+        FOREIGN KEY (`order_id`)
+        REFERENCES `orders`(`order_id`)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+-- =============================================================================
+-- ORDER ITEMS
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS `order_items` (
+
+    `id` INT NOT NULL AUTO_INCREMENT,
+
+    `order_id` INT NOT NULL,
+
+    `product_id` INT DEFAULT NULL,
+
+    `product_sku` VARCHAR(100) DEFAULT NULL,
+    `product_name` VARCHAR(255) DEFAULT NULL,
+
+    `quantity` INT NOT NULL DEFAULT 1,
+
+    `unit_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    `total_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+
+    `selected_color` VARCHAR(100) DEFAULT NULL,
+    `selected_size` VARCHAR(100) DEFAULT NULL,
+
+    `image_url` VARCHAR(500) DEFAULT NULL,
+
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (`id`),
+
+    KEY `idx_order_items_order` (`order_id`),
+    KEY `idx_order_items_product` (`product_id`),
+
+    CONSTRAINT `fk_order_items_order`
+        FOREIGN KEY (`order_id`)
+        REFERENCES `orders`(`id`)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT `fk_order_items_product`
+        FOREIGN KEY (`product_id`)
+        REFERENCES `products`(`id`)
+        ON DELETE SET NULL
+        ON UPDATE CASCADE
+
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================================================
+-- ORDERS
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS `orders` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `order_id` VARCHAR(100) NOT NULL,
+    `user_id` INT DEFAULT NULL,
+    `merchant_id` VARCHAR(255) DEFAULT NULL,
+
+    `customer_name` VARCHAR(200) DEFAULT NULL,
+    `customer_email` VARCHAR(255) DEFAULT NULL,
+    `customer_phone` VARCHAR(50) NOT NULL,
+
+    `shipping_address` TEXT DEFAULT NULL,
+    `city` VARCHAR(100) DEFAULT NULL,
+    `state` VARCHAR(100) DEFAULT NULL,
+    `country` VARCHAR(100) DEFAULT NULL,
+    `pincode` VARCHAR(20) DEFAULT NULL,
+
+    `subtotal` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    `tax` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    `shipping_cost` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    `total_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+
+    `payment_method` ENUM('COD','ONLINE') NOT NULL DEFAULT 'COD',
+    `payment_status` ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
+
+    `order_status` ENUM('pending','confirmed','processing','shipped','delivered','cancelled') NOT NULL DEFAULT 'pending',
+
+    `status` VARCHAR(50) NOT NULL DEFAULT 'pending',
+
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_orders_order_id` (`order_id`),
+
+    KEY `idx_orders_user` (`user_id`),
+
+    CONSTRAINT `fk_orders_user`
+        FOREIGN KEY (`user_id`)
+        REFERENCES `users`(`id`)
+        ON DELETE SET NULL
+        ON UPDATE CASCADE
+
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+-- 
+
+
+
+-- for serevr
+
+-- 1. Fix orders.order_id column
+ALTER TABLE orders 
+MODIFY order_id VARCHAR(100) 
+CHARACTER SET utf8mb4 
+COLLATE utf8mb4_unicode_ci;
+
+-- 2. Fix shipments.order_id column
+ALTER TABLE shipments 
+MODIFY order_id VARCHAR(100) 
+CHARACTER SET utf8mb4 
+COLLATE utf8mb4_unicode_ci;
+
+-- 3. Re-add the Foreign Key (optional but recommended)
+ALTER TABLE shipments 
+ADD CONSTRAINT fk_shipments_order 
+FOREIGN KEY (`order_id`) REFERENCES `orders`(`order_id`) 
+ON DELETE CASCADE ON UPDATE CASCADE;
+
+SELECT 
+    CONSTRAINT_NAME,
+    COLUMN_NAME,
+    REFERENCED_TABLE_NAME,
+    REFERENCED_COLUMN_NAME
+FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+WHERE TABLE_SCHEMA = DATABASE() 
+  AND TABLE_NAME = 'shipments' 
+  AND REFERENCED_TABLE_NAME IS NOT NULL;
+
+
+
+
+
+
+
+
+
+
+
+
+
+--   localhost 
+DROP TABLE IF EXISTS `shipments`;
+
+CREATE TABLE IF NOT EXISTS `shipments` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    
+    `order_id` BIGINT UNSIGNED NOT NULL,
+    
+    `customer_name` VARCHAR(255) DEFAULT NULL,
+    `phone` VARCHAR(20) DEFAULT NULL,
+    
+    `shipping_address` TEXT NULL,
+    `city` VARCHAR(100) DEFAULT NULL,
+    `state` VARCHAR(100) DEFAULT NULL,
+    `country` VARCHAR(100) DEFAULT 'India',
+    `pincode` VARCHAR(20) DEFAULT NULL,
+    
+    `tracking_id` VARCHAR(100) DEFAULT NULL,
+    
+    `shipment_status` ENUM('pending','confirmed','packed','shipped','in_transit','out_for_delivery','delivered','cancelled','returned') 
+        DEFAULT 'pending',
+    
+    `shipping_charge` DECIMAL(10,2) DEFAULT 0.00,
+    `shipping_charge_status` ENUM('pending','success','failed') DEFAULT 'pending',
+    
+    `cod_amount` DECIMAL(10,2) DEFAULT 0.00,
+    `cod_status` ENUM('pending','collected','failed') DEFAULT 'pending',
+    
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+
+
+CREATE TABLE product_variants (
+
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    variant_id VARCHAR(50) UNIQUE NOT NULL,
+
+    product_id VARCHAR(50) NOT NULL,
+
+    sku VARCHAR(100) UNIQUE,
+
+    color_name VARCHAR(100),
+
+    color_hex VARCHAR(20),
+
+    size VARCHAR(50),
+
+    mrp DECIMAL(10,2),
+
+    selling_price DECIMAL(10,2),
+
+    actual_cost_price DECIMAL(10,2),
+
+    discount_price DECIMAL(10,2),
+
+    stock INT DEFAULT 0,
+
+    status TINYINT DEFAULT 1,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(product_id)
+    REFERENCES products(product_id)
+    ON DELETE CASCADE
+);
+
+
+ALTER TABLE products
+ADD COLUMN gst DECIMAL(5,2) DEFAULT 18.00 AFTER net_weight;
+ALTER TABLE product_images
+ADD COLUMN variant_id VARCHAR(50) AFTER product_id;

@@ -1,5 +1,5 @@
 <?php
-// paymentStatus.php - Clean JSON Response with status & message
+// paymentStatus.php - Smart Version (Detects ONLINE or COD)
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: http://localhost:5173');
@@ -14,15 +14,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 session_start();
 include 'accessToken.php';
+include '../db/db_con.php';
 
 $merchantOrderId = $_SESSION['merchantOrderId'] ?? $_GET['merchantOrderId'] ?? $_GET['morderid'] ?? null;
 
 if (!$merchantOrderId) {
     http_response_code(400);
-    echo json_encode([
-        'status' => false,
-        'message' => 'Order ID not found'
-    ]);
+    echo json_encode(['status' => false, 'message' => 'Order ID not found']);
     exit;
 }
 
@@ -30,67 +28,99 @@ if (!$merchantOrderId) {
 $statusUrl = "https://api-preprod.phonepe.com/apis/pg-sandbox/checkout/v2/order/" . $merchantOrderId . "/status";
 
 $curl = curl_init();
-curl_setopt_array($curl, array(
+curl_setopt_array($curl, [
     CURLOPT_URL => $statusUrl,
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_TIMEOUT => 30,
-    CURLOPT_HTTPHEADER => array(
+    CURLOPT_HTTPHEADER => [
         'Content-Type: application/json',
         'Authorization: O-Bearer ' . trim($accessToken)
-    ),
-));
+    ],
+]);
 
 $response = curl_exec($curl);
 $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+curl_close($curl);
 
-if (curl_errno($curl)) {
+if (curl_errno($curl) || $httpCode !== 200) {
     http_response_code(500);
-    echo json_encode([
-        'status' => false,
-        'message' => 'cURL Error: ' . curl_error($curl)
-    ]);
-    curl_close($curl);
+    echo json_encode(['status' => false, 'message' => 'Failed to connect to PhonePe']);
     exit;
 }
 
-curl_close($curl);
-
 $data = json_decode($response, true);
 
-// === FINAL CLEAN RESPONSE ===
-if (isset($data['state'])) {
-    
-    $state = strtoupper($data['state']);
-    $isSuccess = ($state === 'COMPLETED');
+// Determine Status
+$phonepeState = strtoupper($data['state'] ?? 'UNKNOWN');
 
-    $message = match($state) {
-        'COMPLETED' => 'Payment Successful',
-        'FAILED'    => 'Payment Failed',
-        'PENDING'   => 'Payment is Pending',
-        default     => 'Unknown Payment Status'
-    };
+$paymentStatus = match($phonepeState) {
+    'COMPLETED' => 'success',
+    'FAILED'    => 'failed',
+    'PENDING'   => 'pending',
+    default     => 'unknown'
+};
 
-    echo json_encode([
-        'status'  => $isSuccess,
-        'message' => $message,
-        'state'   => $state,
-        'data'    => [
-            'merchantOrderId' => $merchantOrderId,
-            'phonepeOrderId'  => $data['orderId'] ?? null,
-            'amount'          => isset($data['amount']) ? $data['amount'] / 100 : 0,
-            'errorCode'       => $data['errorCode'] ?? null,
-            'raw'             => $data   // Full PhonePe response (for debugging)
-        ]
-    ]);
+$message = match($phonepeState) {
+    'COMPLETED' => 'Payment Successful',
+    'FAILED'    => 'Payment Failed',
+    'PENDING'   => 'Payment is Pending',
+    default     => 'Unknown Payment Status'
+};
+
+// === FIND ORDER & PAYMENT METHOD ===
+$stmt = $pdo->prepare("
+    SELECT payment_method, order_id FROM orders 
+    WHERE order_id = ? OR merchant_id = ? 
+    LIMIT 1
+");
+$stmt->execute([$merchantOrderId, $merchantOrderId]);
+$order = $stmt->fetch(PDO::FETCH_ASSOC);
+
+$paymentMethod = $order ? strtoupper($order['payment_method']) : 'ONLINE';
+$Order_id = $order ? $order['order_id'] : null;
+// === UPDATE BASED ON PAYMENT METHOD ===
+if ($paymentMethod === 'COD') {
+    // Update only Shipment Table for COD (Shipping Charge)
+    $stmt = $pdo->prepare("
+        UPDATE shipments 
+        SET shipping_charge_status = ?,
+            shipment_status = IF(? = 'success', 'shipped', shipment_status),
+            updated_at = NOW()
+        WHERE order_id = ?
+    ");
+    $stmt->execute([$paymentStatus, $paymentStatus, $Order_id]);
 
 } else {
-    http_response_code(400);
-    echo json_encode([
-        'status'  => false,
-        'message' => 'Failed to fetch payment status from PhonePe',
-        'data'    => null
+    // Update Orders Table for ONLINE Payment
+    $stmt = $pdo->prepare("
+        UPDATE orders 
+        SET payment_status = ?,
+            order_status = ?,
+            updated_at = NOW()
+        WHERE order_id = ? OR merchant_id = ?
+    ");
+    $stmt->execute([
+        $paymentStatus,
+        ($paymentStatus === 'success') ? 'confirmed' : 'pending',
+        $merchantOrderId,
+        $merchantOrderId
     ]);
 }
+
+// === FINAL RESPONSE ===
+echo json_encode([
+    'status'  => ($paymentStatus === 'success'),
+    'message' => $message,
+    'state'   => $phonepeState,
+    'payment_method' => $paymentMethod,
+    'data'    => [
+        'merchantOrderId' => $merchantOrderId,
+        'phonepeOrderId'  => $data['orderId'] ?? null,
+        'amount'          => isset($data['amount']) ? $data['amount'] / 100 : 0,
+        'payment_status'  => $paymentStatus,
+        'raw'             => $data
+    ]
+]);
 
 unset($_SESSION['merchantOrderId']);
 ?>

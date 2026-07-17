@@ -7,9 +7,9 @@
 $servername = "localhost";
 $username = "root";
 $password = "";
-$dbname = "schoolbags_db";
+$dbname = "smc";
 
-// IMPORTANT: Only one DB is used by this app: schoolbags_db.
+// IMPORTANT: Only one DB is used by this app: smc.
 // We still need to ensure the DB exists before connecting.
 try {
     $conn = new PDO("mysql:host=$servername", $username, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
@@ -350,6 +350,9 @@ function suggestExistingImagePath(): ?string {
     $basename = basename($file);
     return 'uploads/products/' . $basename;
 }
+
+
+
 
 // Admin API token (simple protection for admin endpoints).
 // Set environment variable ADMIN_API_TOKEN in your Apache/PHP environment for production.

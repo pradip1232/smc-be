@@ -19,20 +19,19 @@ $endDate    = $_GET['enddate'] ?? null;
 $search     = $_GET['search'] ?? null;
 $limit      = max(1, (int)($_GET['limit'] ?? 50));
 $page       = max(1, (int)($_GET['page'] ?? 1));
-$offset     = ($page - 1) * $limit;
+
+$offset = ($page - 1) * $limit;
 
 try {
     $whereConditions = [];
     $params = [];
 
-    // Status filter
+    // Build common WHERE conditions
     if ($status) {
         $whereConditions[] = "(status = ? OR order_status = ?)";
         $params[] = $status;
         $params[] = $status;
     }
-
-    // Date range
     if ($startDate) {
         $whereConditions[] = "created_at >= ?";
         $params[] = $startDate . ' 00:00:00';
@@ -41,8 +40,6 @@ try {
         $whereConditions[] = "created_at <= ?";
         $params[] = $endDate . ' 23:59:59';
     }
-
-    // Search
     if ($search) {
         $whereConditions[] = "(order_id LIKE ? OR customer_name LIKE ? OR customer_email LIKE ?)";
         $searchTerm = "%$search%";
@@ -53,16 +50,27 @@ try {
 
     $whereClause = !empty($whereConditions) ? " WHERE " . implode(" AND ", $whereConditions) : "";
 
-    // Count total records
-    $countSql = "SELECT COUNT(*) FROM orders" . $whereClause;
+    // ====================== SUMMARY COUNTS ======================
+    $countSql = "SELECT 
+                    COUNT(*) as total_orders,
+                    SUM(CASE WHEN status IN ('pending','new','to_accept') OR order_status IN ('pending','new','to_accept') THEN 1 ELSE 0 END) as to_accept,
+                    SUM(CASE WHEN status IN ('processing','to_pack','packed') OR order_status IN ('processing','to_pack','packed') THEN 1 ELSE 0 END) as to_pack,
+                    SUM(CASE WHEN status IN ('transit','shipped','in_transit','out_for_delivery') OR order_status IN ('transit','shipped') THEN 1 ELSE 0 END) as in_transit,
+                    SUM(CASE WHEN status IN ('completed','delivered','done') OR order_status IN ('completed','delivered') THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status IN ('upcoming','scheduled') OR order_status IN ('upcoming','scheduled') THEN 1 ELSE 0 END) as upcoming
+                 FROM orders" . $whereClause;
+
     $countStmt = $pdo->prepare($countSql);
     $countStmt->execute($params);
-    $totalRecords = (int)$countStmt->fetchColumn();
+    $summary = $countStmt->fetch(PDO::FETCH_ASSOC);
+
+    // ====================== PAGINATION COUNT ======================
+    $totalRecords = (int)$summary['total_orders'];
     $totalPages = ceil($totalRecords / $limit);
 
-    // Main Query
+    // ====================== MAIN ORDERS QUERY ======================
     $sql = "SELECT 
-                id, order_id, user_id, customer_name, customer_email, customer_phone,
+                id, order_id, user_id, merchant_id, customer_name, customer_email, customer_phone,
                 shipping_address, city, state, country, pincode,
                 payment_method, total_amount, subtotal, tax, shipping_cost,
                 status, order_status, payment_status, created_at, updated_at
@@ -73,7 +81,6 @@ try {
 
     $stmt = $pdo->prepare($sql);
     
-    // Bind all parameters + limit & offset
     $paramIndex = 1;
     foreach ($params as $value) {
         $stmt->bindValue($paramIndex++, $value);
@@ -84,16 +91,24 @@ try {
     $stmt->execute();
     $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // ====================== FINAL RESPONSE ======================
     echo json_encode([
         'status' => true,
         'data' => [
-            // 'pagination' => [
-                'total_records' => $totalRecords,
-                'total_pages' => $totalPages,
-                'current_page' => $page,
-                'limit' => $limit,
-                // ]
-                'orders' => $orders,
+            'total_records' => $totalRecords,
+            'total_pages'   => $totalPages,
+            'current_page'  => $page,
+            'limit'         => $limit,
+            
+            // Summary Counts Added Here
+            'total_orders'  => (int)$summary['total_orders'],
+            'to_accept'     => (int)$summary['to_accept'],
+            'to_pack'       => (int)$summary['to_pack'],
+            'in_transit'    => (int)$summary['in_transit'],
+            'completed'     => (int)$summary['completed'],
+            'upcoming'      => (int)$summary['upcoming'],
+            
+            'orders'        => $orders
         ]
     ]);
 
